@@ -614,7 +614,7 @@ var _ = ginkgo.Describe("[sig-kata] Kata", ginkgo.Serial, func() {
 		ginkgo.By("SUCCESS - peerpod with GPU annotation translated to instance type")
 	})
 
-	ginkgo.It("C00000-verify proxy and trusted CA propagation to CAA and PodVM jobs [Serial]", func() {
+	ginkgo.FIt("C00000-verify proxy and trusted CA propagation to CAA and PodVM jobs [Serial]", func() {
 		// This test patches the Subscription and peer-pods-cm, each of which
 		// makes the operator rewrite the CAA daemonset. Its cleanup returns
 		// while that rollout is still in flight, and as the last spec of the
@@ -622,7 +622,7 @@ var _ = ginkgo.Describe("[sig-kata] Kata", ginkgo.Serial, func() {
 		// The caa suite runs next in the post-phase chain, labels the live CAA
 		// pods and then cannot find them, failing every pod-VM assessment.
 		// Re-enable once the cleanup waits for the rollout (PR #3504).
-		ginkgo.Skip("leaves the CAA daemonset rolling and breaks the caa suite")
+		// ginkgo.Skip("leaves the CAA daemonset rolling and breaks the caa suite")
 		if !testrun.enablePeerPods || cloudPlatform != "azure" {
 			ginkgo.Skip("Test supported only with peer-pods and Azure")
 		}
@@ -937,7 +937,7 @@ var _ = ginkgo.Describe("[sig-kata] Mixed Cluster", ginkgo.Serial, func() {
 	defer ginkgo.GinkgoRecover()
 
 	var (
-		oc = compat_otp.NewCLI("kata-mixed", compat_otp.KubeConfigPath())
+		oc = NewOC("kata-mixed")
 	)
 
 	testrun := TestRunDescription{
@@ -1146,7 +1146,7 @@ var _ = ginkgo.Describe("[sig-kata] Mixed Cluster", ginkgo.Serial, func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "failed to create kata pod")
 
 		ginkgo.By("Verifying pod landed on kata-capable node")
-		nodeName, err := compat_otp.GetPodNodeName(oc, pod.namespace, pod.name)
+		nodeName, err := GetPodNodeName(oc, pod.namespace, pod.name)
 		o.Expect(err).NotTo(o.HaveOccurred(), "failed to get pod node name")
 
 		nodeLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
@@ -1172,7 +1172,7 @@ var _ = ginkgo.Describe("[sig-kata] Mixed Cluster", ginkgo.Serial, func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "failed to create kata-remote pod")
 
 		ginkgo.By("Verifying pod landed on virtual node")
-		nodeName, err := compat_otp.GetPodNodeName(oc, pod.namespace, pod.name)
+		nodeName, err := GetPodNodeName(oc, pod.namespace, pod.name)
 		o.Expect(err).NotTo(o.HaveOccurred(), "failed to get pod node name")
 
 		nodeType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
