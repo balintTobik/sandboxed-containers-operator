@@ -735,14 +735,19 @@ var _ = ginkgo.Describe("[sig-kata] Kata", ginkgo.Serial, func() {
 		// wait for the caa daemonset to be recreated after restoring the subscription
 		ginkgo.DeferCleanup(func() {
 			ginkgo.By("Restoring subscription to remove proxy and volume config")
+			caaDSGenCurrent, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"daemonset", caaDsName, "-n", opNamespace,
+				"-o=jsonpath={.metadata.generation}",
+			).Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get caaDsGeneration")
 			restorePatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/config", "value": %s}]`, subscriptionConfig)
 			_, restoreErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(
 				"subscription", subscriptionName, "-n", opNamespace,
 				"--type=json", "-p", restorePatch,
 			).Output()
 			o.Expect(restoreErr).NotTo(o.HaveOccurred(), "failed to restore subscription")
-			ctx4, cancel4 := context.WithTimeout(context.Background(), 5*time.Minute)
-			err = wait.PollUntilContextTimeout(ctx4, 10*time.Second, 5*time.Minute, true, func(_ context.Context) (bool, error) {
+			ctx5, cancel5 := context.WithTimeout(context.Background(), 5*time.Minute)
+			err = wait.PollUntilContextTimeout(ctx5, 10*time.Second, 5*time.Minute, true, func(_ context.Context) (bool, error) {
 				caaDSJSON, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args(
 					"daemonset", caaDsName, "-n", opNamespace,
 					"-o=json",
@@ -751,7 +756,7 @@ var _ = ginkgo.Describe("[sig-kata] Kata", ginkgo.Serial, func() {
 					Logf("CAA daemonset not found yet, waiting...")
 					return false, nil
 				}
-				if gjson.Get(caaDSJSON, "status.observedGeneration").String() == caaDSGenStart {
+				if gjson.Get(caaDSJSON, "status.observedGeneration").String() == caaDSGenCurrent {
 					return false, nil
 				}
 				if gjson.Get(caaDSJSON, "status.numberReady").Int() != gjson.Get(caaDSJSON, "status.desiredNumberScheduled").Int() {
@@ -759,7 +764,7 @@ var _ = ginkgo.Describe("[sig-kata] Kata", ginkgo.Serial, func() {
 				}
 				return true, nil
 			})
-			cancel4()
+			cancel5()
 			o.Expect(err).NotTo(o.HaveOccurred(), "osc-caa daemonset was not recreated in time")
 		})
 
@@ -860,12 +865,35 @@ var _ = ginkgo.Describe("[sig-kata] Kata", ginkgo.Serial, func() {
 
 		ginkgo.DeferCleanup(func() {
 			ginkgo.By("Restoring AZURE_IMAGE_ID in peer-pods-cm")
+			caaDSGenCurrent, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"daemonset", caaDsName, "-n", opNamespace,
+				"-o=jsonpath={.metadata.generation}",
+			).Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get caaDsGeneration")
 			restorePatch := fmt.Sprintf(`{"data": {"AZURE_IMAGE_ID": "%s"}}`, savedImageID)
 			_, restoreErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(
 				"configmap", ppConfigMapName, "-n", opNamespace,
 				"--type=merge", "-p", restorePatch,
 			).Output()
 			o.Expect(restoreErr).NotTo(o.HaveOccurred(), "failed to restore AZURE_IMAGE_ID in peer-pods-cm")
+			ginkgo.By("Waiting for caa daemonset to be recreated with the restored AZURE_IMAGE_ID")
+			ctx4, cancel4 := context.WithTimeout(context.Background(), 5*time.Minute)
+			err = wait.PollUntilContextTimeout(ctx4, 10*time.Second, 5*time.Minute, true, func(_ context.Context) (bool, error) {
+				caaDSJSON, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+					"daemonset", caaDsName, "-n", opNamespace,
+					"-o=json",
+				).Output()
+				if getErr != nil {
+					Logf("CAA daemonset not found yet, waiting...")
+					return false, nil
+				}
+				if gjson.Get(caaDSJSON, "status.observedGeneration").String() == caaDSGenCurrent {
+					return false, nil
+				}
+				return true, nil
+			})
+			cancel4()
+			o.Expect(err).NotTo(o.HaveOccurred(), "CAA daemonset was not recreated in time after restoring AZURE_IMAGE_ID")
 		})
 
 		ginkgo.By("Waiting for podvm image creation job to start")
